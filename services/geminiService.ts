@@ -2,10 +2,11 @@ import { GoogleGenAI, Type, GenerateContentResponse, Chat } from "@google/genai"
 import { Species, SchemeInfo } from '../types';
 import { CATTLE_BREEDS, BUFFALO_BREEDS } from '../constants';
 
-const API_KEY = process.env.API_KEY;
+// The platform handles the API key injection
+const API_KEY = process.env.GEMINI_API_KEY;
 
 if (!API_KEY) {
-  console.error("Gemini API key is not set. Please set the API_KEY environment variable.");
+  console.error("Gemini API key is not set. Please ensure GEMINI_API_KEY is available.");
 }
 
 const ai = new GoogleGenAI({ apiKey: API_KEY! });
@@ -108,7 +109,7 @@ export const identifyBreed = async (images: { mimeType: string; data: string }[]
 
   try {
     const response = await ai.models.generateContent({
-        model: "gemini-2.5-flash",
+        model: "gemini-3-flash-preview",
         contents: { parts: [...imageParts, { text: prompt }] },
         config: {
             systemInstruction: systemInstruction,
@@ -117,8 +118,7 @@ export const identifyBreed = async (images: { mimeType: string; data: string }[]
         },
     });
 
-    const jsonText = response.text;
-    const result = JSON.parse(jsonText);
+    const result = JSON.parse(response.text);
     
     if(result.error && result.error.toLowerCase() === 'null') {
       result.error = null;
@@ -201,7 +201,7 @@ export const detectAnimalDetails = async (image: { mimeType: string; data: strin
 
     try {
         const response = await ai.models.generateContent({
-            model: "gemini-2.5-flash",
+            model: "gemini-3-flash-preview",
             contents: { parts: [imagePart, { text: prompt }] },
             config: {
                 responseMimeType: "application/json",
@@ -209,8 +209,7 @@ export const detectAnimalDetails = async (image: { mimeType: string; data: strin
             },
         });
 
-        const jsonText = response.text;
-        const result = JSON.parse(jsonText);
+        const result = JSON.parse(response.text);
 
         if (result.error && result.error.toLowerCase() === 'null') {
             result.error = null;
@@ -239,7 +238,7 @@ export const getBreedFacts = async (breedName: string, species: Species) => {
 
     try {
         const response = await ai.models.generateContent({
-            model: "gemini-2.5-flash",
+            model: "gemini-3-flash-preview",
             contents: prompt,
             config: {
                 tools: [{ googleSearch: {} }],
@@ -303,7 +302,7 @@ export const getSchemeInfo = async (breedName: string, species: Species): Promis
 
     try {
         const response = await ai.models.generateContent({
-            model: "gemini-2.5-flash",
+            model: "gemini-3-flash-preview",
             contents: prompt,
             config: {
                 responseMimeType: "application/json",
@@ -311,8 +310,7 @@ export const getSchemeInfo = async (breedName: string, species: Species): Promis
             },
         });
 
-        const jsonText = response.text;
-        const result = JSON.parse(jsonText);
+        const result = JSON.parse(response.text);
         return { schemes: result, error: null };
     } catch (error) {
         console.error("Error fetching scheme info:", error);
@@ -352,15 +350,14 @@ export const getVaccinationSchedule = async (breedName: string, species: Species
     `;
     try {
         const response = await ai.models.generateContent({
-            model: "gemini-2.5-flash",
+            model: "gemini-3-flash-preview",
             contents: prompt,
             config: {
                 responseMimeType: "application/json",
                 responseSchema: vaccinationsSchema,
             },
         });
-        const jsonText = response.text;
-        return { suggestions: JSON.parse(jsonText), error: null };
+        return { suggestions: JSON.parse(response.text), error: null };
     } catch (error) {
         console.error("Error fetching vaccination schedule:", error);
         return {
@@ -372,7 +369,7 @@ export const getVaccinationSchedule = async (breedName: string, species: Species
 
 export const startChat = (breedName: string) => {
     breedChatInstance = ai.chats.create({
-        model: 'gemini-2.5-flash',
+        model: 'gemini-3-flash-preview',
         config: {
             systemInstruction: `You are a helpful veterinary assistant specializing in Indian livestock. Your knowledge is focused on the ${breedName} breed. Answer questions clearly and concisely for field workers. Cover topics like care, common diseases, productivity, and nutrition.`,
         },
@@ -398,7 +395,7 @@ export const sendMessageToChat = async (message: string): Promise<string> => {
 export const startGeneralChat = () => {
     if (!generalChatInstance) {
         generalChatInstance = ai.chats.create({
-            model: 'gemini-2.5-flash',
+            model: 'gemini-3-flash-preview',
             config: {
                 systemInstruction: `You are पशुHelper, a friendly and knowledgeable AI assistant for veterinary field workers in India. Your expertise covers two main areas: 1. **Indian Livestock:** You can answer questions about all recognized Indian cattle and buffalo breeds, including their care, productivity, and health. 2. **The PashuVision App:** You are an expert on this application. You can guide users on how to use the app, including how to perform new registrations, view history, understand the dashboard, use the AI for breed identification, and update records. Always provide clear, practical, and concise answers, prioritizing animal welfare and standard veterinary practices when applicable.`,
             },

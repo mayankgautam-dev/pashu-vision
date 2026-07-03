@@ -1,0 +1,124 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "Veterinary Field Officer profile",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "name": { "type": "string" },
+        "email": { "type": "string" },
+        "role": { "type": "string", "enum": ["admin", "vfo"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "lastLogin": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "name", "email", "role"]
+    },
+    "Animal": {
+      "title": "Animal",
+      "description": "Individual animal record",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "ownerId": { "type": "string" },
+        "species": { "type": "string", "enum": ["Cattle", "Buffalo"] },
+        "ageValue": { "type": "string" },
+        "ageUnit": { "type": "string", "enum": ["Years", "Months"] },
+        "sex": { "type": "string", "enum": ["Male", "Female"] },
+        "breedName": { "type": "string" },
+        "confidence": { "type": "number" },
+        "photoUrls": { "type": "array", "items": { "type": "string" } }
+      },
+      "required": ["id", "ownerId", "species", "breedName"]
+    },
+    "Registration": {
+      "title": "Registration",
+      "description": "Official registration record linking owner and animals",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "vfoId": { "type": "string" },
+        "timestamp": { "type": "string", "format": "date-time" },
+        "owner": { "$ref": "Owner" },
+        "animalIds": { "type": "array", "items": { "type": "string" } },
+        "status": { "type": "string", "enum": ["Completed", "Draft"] }
+      },
+      "required": ["id", "vfoId", "timestamp", "owner", "animalIds"]
+    },
+    "Owner": {
+      "title": "Owner",
+      "description": "Livestock owner details",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "mobile": { "type": "string" },
+        "idNumber": { "type": "string" },
+        "address": { "type": "string" }
+      }
+    },
+    "Vaccination": {
+      "title": "Vaccination",
+      "description": "Health and vaccination record",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "animalId": { "type": "string" },
+        "vaccineName": { "type": "string" },
+        "administeredDate": { "type": "string", "format": "date-time" },
+        "dueDate": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "animalId", "vaccineName", "administeredDate"]
+    },
+    "Draft": {
+      "title": "Draft",
+      "description": "Unfinished registration draft",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "vfoId": { "type": "string" },
+        "data": { "type": "object" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "vfoId", "data"]
+    },
+    "Certificate": {
+      "title": "Certificate",
+      "description": "Generated certificate metadata",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "registrationId": { "type": "string" },
+        "pdfUrl": { "type": "string" },
+        "qrCode": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "registrationId", "pdfUrl"]
+    }
+  },
+  "firestore": {
+    "/users/{uid}": {
+      "schema": "User",
+      "description": "User profiles"
+    },
+    "/animals/{animalId}": {
+      "schema": "Animal",
+      "description": "Animal records"
+    },
+    "/registrations/{regId}": {
+      "schema": "Registration",
+      "description": "Registration records"
+    },
+    "/vaccinations/{vacId}": {
+      "schema": "Vaccination",
+      "description": "Vaccination records"
+    },
+    "/drafts/{draftId}": {
+      "schema": "Draft",
+      "description": "Registration drafts"
+    },
+    "/certificates/{certId}": {
+      "schema": "Certificate",
+      "description": "Certificate metadata"
+    }
+  }
+}

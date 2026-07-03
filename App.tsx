@@ -1,4 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
+import { Toaster } from 'sonner';
 import { Header } from './components/Header';
 import { Dashboard } from './components/Dashboard';
 import { RegistrationWizard } from './components/RegistrationWizard';
@@ -7,6 +9,8 @@ import { AnalyticsPage } from './components/AnalyticsPage';
 import { QuickIdTool } from './components/QuickIdTool';
 import { Registration } from './types';
 import { LanguageProvider, useLanguage } from './contexts/LanguageContext';
+import { AuthProvider, useAuth } from './contexts/AuthContext';
+import { LoginPage } from './components/LoginPage';
 import * as dbService from './services/databaseService';
 import { Icon } from './components/icons';
 import { UserGuideModal } from './components/UserGuideModal';
@@ -28,17 +32,29 @@ const AppContent: React.FC = () => {
   const [globalAutoFill] = useState(true);
   
   const { t } = useLanguage();
+  const { user, userProfile, loading: authLoading } = useAuth();
   
   useEffect(() => {
-    dbService.getAllRegistrations().then(data => {
-        setRegistrations(data);
+    if (user) {
+      const isAdmin = userProfile?.role === 'admin' || user.email === 'mayank.bonfire@gmail.com';
+      dbService.getAllRegistrations(user.uid, isAdmin).then(data => {
+          setRegistrations(data);
+          setIsDbLoading(false);
+      }).catch(err => {
+          console.error("Failed to load data from server:", err);
+          setIsDbLoading(false);
+          // Only alert if it's not a permission error that might be transient
+          if (!err.message?.includes('permission')) {
+            alert("Could not load data from server. Please check your connection.");
+          }
+      });
+    } else if (!authLoading) {
+      setTimeout(() => {
+        setRegistrations([]);
         setIsDbLoading(false);
-    }).catch(err => {
-        console.error("Failed to load data from server:", err);
-        setIsDbLoading(false);
-        alert("Could not load data from server. Please check your connection.");
-    });
-  }, []);
+      }, 0);
+    }
+  }, [user, userProfile, authLoading]);
 
   useEffect(() => {
     const handleOnline = () => setIsOnline(true);
@@ -68,13 +84,12 @@ const AppContent: React.FC = () => {
     
     const syncPromises = unsynced.map(async (reg) => {
         try {
-            await new Promise(res => setTimeout(res, 750)); // Simulate API call
-            const updatedReg = { ...reg, synced: true };
-            await dbService.upsertRegistration(updatedReg);
-            return updatedReg.id; // Return ID on success
+            const success = await dbService.upsertRegistration({ ...reg, synced: true });
+            if (success) return reg.id;
+            return null;
         } catch (error) {
             console.error('Failed to sync registration:', reg.id, error);
-            return null; // Return null on failure
+            return null;
         }
     });
 
@@ -92,27 +107,30 @@ const AppContent: React.FC = () => {
 
   useEffect(() => {
     if (isOnline) {
-      syncUnsyncedRegistrations();
+      const timer = setTimeout(() => {
+        syncUnsyncedRegistrations();
+      }, 0);
+      return () => clearTimeout(timer);
     }
   }, [isOnline, syncUnsyncedRegistrations]);
 
   const handleRegistrationComplete = async (completedReg: Registration) => {
-    const isUpdating = registrationToEdit != null;
     const regToSave = { 
         ...completedReg, 
-        synced: isUpdating ? registrationToEdit.synced : false 
+        synced: isOnline // Set synced to true if online
     };
     
-    await dbService.upsertRegistration(regToSave);
-
+    const success = await dbService.upsertRegistration(regToSave);
+    
     setRegistrations(prevRegs => {
         const existingIndex = prevRegs.findIndex(reg => reg.id === regToSave.id);
+        const finalReg = { ...regToSave, synced: success ? regToSave.synced : false };
         if (existingIndex > -1) {
             const newRegs = [...prevRegs];
-            newRegs[existingIndex] = regToSave;
+            newRegs[existingIndex] = finalReg;
             return newRegs;
         }
-        return [...prevRegs, regToSave];
+        return [...prevRegs, finalReg];
     });
   };
 
@@ -182,17 +200,21 @@ const AppContent: React.FC = () => {
     }
   };
 
-  if (isDbLoading) {
+  if (authLoading || (user && isDbLoading)) {
     return (
         <div className="min-h-screen bg-cream-50 flex flex-col items-center justify-center text-center p-4">
             <div className="relative flex items-center justify-center">
                 <div className="absolute w-20 h-20 bg-primary-200 rounded-full animate-ping opacity-50"></div>
                 <Icon name="cow" className="w-16 h-16 text-primary-700" />
             </div>
-            <h1 className="text-xl font-bold text-primary-800 mt-6">{t('app.connectingDb')}</h1>
-            <p className="text-primary-700">{t('app.loadingRecords')}</p>
+            <h1 className="text-xl font-bold text-primary-800 mt-6">{authLoading ? t('app.authenticating') || 'Authenticating...' : t('app.connectingDb')}</h1>
+            <p className="text-primary-700">{authLoading ? t('app.pleaseWait') || 'Please wait...' : t('app.loadingRecords')}</p>
         </div>
     );
+  }
+
+  if (!user) {
+    return <LoginPage />;
   }
 
   return (
@@ -205,8 +227,19 @@ const AppContent: React.FC = () => {
         onOpenGuide={() => setIsGuideOpen(true)}
       />
       <main className="container mx-auto p-4">
-        {renderView()}
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={currentView + (selectedRegistration?.id || '') + (registrationToEdit?.id || '')}
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            transition={{ duration: 0.2 }}
+          >
+            {renderView()}
+          </motion.div>
+        </AnimatePresence>
       </main>
+      <Toaster position="top-right" richColors />
       <UserGuideModal isOpen={isGuideOpen} onClose={() => setIsGuideOpen(false)} />
     </div>
   );
@@ -215,7 +248,9 @@ const AppContent: React.FC = () => {
 const App: React.FC = () => {
     return (
         <LanguageProvider>
-            <AppContent />
+            <AuthProvider>
+                <AppContent />
+            </AuthProvider>
         </LanguageProvider>
     );
 }

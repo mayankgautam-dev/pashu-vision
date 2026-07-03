@@ -1,37 +1,71 @@
 import { Registration } from '../types';
+import { db, collection, doc, setDoc, getDocs, query, orderBy, where, OperationType, handleFirestoreError, auth } from '../firebase';
 
-const API_BASE = '/api';
+const COLLECTION_NAME = 'registrations';
 
-// Get all registrations from the server
-export const getAllRegistrations = async (): Promise<Registration[]> => {
+// Get all registrations from Firestore
+export const getAllRegistrations = async (vfoId?: string, isAdmin: boolean = false): Promise<Registration[]> => {
     try {
-        const response = await fetch(`${API_BASE}/registrations`);
-        if (!response.ok) {
-            throw new Error('Failed to fetch registrations');
+        let q;
+        if (isAdmin || !vfoId) {
+            q = query(collection(db, COLLECTION_NAME), orderBy('timestamp', 'desc'));
+        } else {
+            q = query(collection(db, COLLECTION_NAME), where('vfoId', '==', vfoId), orderBy('timestamp', 'desc'));
         }
-        return await response.json();
+        
+        const querySnapshot = await getDocs(q);
+        const registrations: Registration[] = [];
+        querySnapshot.forEach((doc) => {
+            registrations.push(doc.data() as Registration);
+        });
+        return registrations;
     } catch (error) {
-        console.error('Error fetching registrations:', error);
-        // Fallback to empty array if server is unavailable
+        handleFirestoreError(error, OperationType.GET, COLLECTION_NAME);
         return [];
     }
 };
 
-// Add or update a registration on the server
-export const upsertRegistration = async (registration: Registration): Promise<void> => {
+// Add or update a registration on Firestore
+export const upsertRegistration = async (registration: Registration): Promise<boolean> => {
     try {
-        const response = await fetch(`${API_BASE}/registrations`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(registration),
-        });
-        if (!response.ok) {
-            throw new Error('Failed to save registration');
-        }
+        const regDoc = doc(db, COLLECTION_NAME, registration.id);
+        // Ensure vfoId is set
+        const dataToSave = {
+            ...registration,
+            vfoId: auth.currentUser?.uid || 'anonymous',
+            updatedAt: new Date().toISOString()
+        };
+        await setDoc(regDoc, dataToSave, { merge: true });
+        return true;
     } catch (error) {
-        console.error('Error saving registration:', error);
-        throw error;
+        handleFirestoreError(error, OperationType.WRITE, `${COLLECTION_NAME}/${registration.id}`);
+        return false;
+    }
+};
+
+// Drafts management
+export const saveDraft = async (draftId: string, data: any): Promise<void> => {
+    try {
+        const draftDoc = doc(db, 'drafts', draftId);
+        await setDoc(draftDoc, {
+            id: draftId,
+            vfoId: auth.currentUser?.uid || 'anonymous',
+            data,
+            updatedAt: new Date().toISOString()
+        });
+    } catch (error) {
+        handleFirestoreError(error, OperationType.WRITE, `drafts/${draftId}`);
+    }
+};
+
+export const getDrafts = async (): Promise<any[]> => {
+    try {
+        if (!auth.currentUser) return [];
+        const q = query(collection(db, 'drafts'), where('vfoId', '==', auth.currentUser.uid));
+        const querySnapshot = await getDocs(q);
+        return querySnapshot.docs.map(doc => doc.data());
+    } catch (error) {
+        console.error('Error fetching drafts:', error);
+        return [];
     }
 };

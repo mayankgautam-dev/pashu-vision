@@ -39,10 +39,18 @@ export const OwnerForm: React.FC<OwnerFormProps> = ({ initialData, onSubmit, onS
   const today = new Date().toISOString().split('T')[0];
   const minDate = new Date(new Date().setFullYear(new Date().getFullYear() - 100)).toISOString().split('T')[0];
 
-  useEffect(() => setFormData(initialData), [initialData]);
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setFormData(initialData);
+    }, 0);
+    return () => clearTimeout(timer);
+  }, [initialData]);
 
   useEffect(() => {
-    setDistricts(formData.state ? INDIAN_STATES_AND_DISTRICTS[formData.state] || [] : []);
+    const timer = setTimeout(() => {
+      setDistricts(formData.state ? INDIAN_STATES_AND_DISTRICTS[formData.state] || [] : []);
+    }, 0);
+    return () => clearTimeout(timer);
   }, [formData.state]);
 
   const validateField = (name: keyof OwnerData, value: string, currentData: OwnerData): string | null => {

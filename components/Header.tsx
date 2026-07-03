@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Icon } from './icons';
 import { useLanguage } from '../contexts/LanguageContext';
+import { useAuth } from '../contexts/AuthContext';
 
 interface HeaderProps {
   onSearch: (term: string) => void;
@@ -14,6 +15,7 @@ export const Header: React.FC<HeaderProps> = ({ onSearch, showSearch, isOnline, 
   const [searchTerm, setSearchTerm] = useState('');
   const [currentTime, setCurrentTime] = useState(new Date());
   const { language, toggleLanguage, t } = useLanguage();
+  const { user, userProfile, logout } = useAuth();
   const [isNotificationOpen, setIsNotificationOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
 
@@ -135,20 +137,29 @@ export const Header: React.FC<HeaderProps> = ({ onSearch, showSearch, isOnline, 
 
               <div ref={profileRef} className="relative">
                 <button onClick={handleProfileClick} className="p-2 rounded-full text-cream-100 hover:bg-primary-800 hover:text-white transition-colors">
-                    <Icon name="user-circle" className="w-5 h-5 sm:w-6 sm:h-6"/>
+                    {user?.photoURL ? (
+                      <img src={user.photoURL} alt="Profile" className="w-6 h-6 sm:w-8 sm:h-8 rounded-full border border-primary-700" referrerPolicy="no-referrer" />
+                    ) : (
+                      <Icon name="user-circle" className="w-5 h-5 sm:w-6 sm:h-6"/>
+                    )}
                 </button>
                 {isProfileOpen && (
                   <div className="absolute right-0 mt-2 w-56 origin-top-right rounded-md bg-white shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none">
                     <div className="py-1">
                       <div className="px-4 py-3">
-                        <p className="text-sm font-bold text-primary-900">Dr. Priya Sharma</p>
-                        <p className="text-xs text-primary-700">Veterinary Field Officer</p>
+                        <p className="text-sm font-bold text-primary-900">{user?.displayName || 'User'}</p>
+                        <p className="text-xs text-primary-700">{userProfile?.role === 'admin' ? 'Administrator' : 'Veterinary Field Officer'}</p>
                       </div>
                       <div className="border-t border-gray-200"></div>
                       <span className="block px-4 py-2 text-sm text-gray-400 cursor-not-allowed">My Profile</span>
                       <span className="block px-4 py-2 text-sm text-gray-400 cursor-not-allowed">Settings</span>
                       <div className="border-t border-gray-200"></div>
-                      <span className="block px-4 py-2 text-sm text-gray-400 cursor-not-allowed">Sign Out</span>
+                      <button 
+                        onClick={() => { logout(); setIsProfileOpen(false); }}
+                        className="w-full text-left block px-4 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors"
+                      >
+                        Sign Out
+                      </button>
                     </div>
                   </div>
                 )}

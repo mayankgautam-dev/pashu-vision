@@ -5,6 +5,9 @@ import { INDIAN_STATES, ALL_BREEDS } from '../constants';
 import { INDIAN_STATES_AND_DISTRICTS } from '../utils/locationData';
 import { useLanguage } from '../contexts/LanguageContext';
 import { HealthRecordModal } from './HealthRecordModal';
+import { maskIdNumber } from '../utils/security';
+import { saveAndUploadCertificate } from '../services/certificateService';
+import { toast } from 'sonner';
 
 interface HistoryPageProps {
   selectedRegistration: Registration | null;
@@ -283,23 +286,37 @@ const RegistrationDetail: React.FC<{ registration: Registration; onBack: () => v
   const [activeAnimalIndex, setActiveAnimalIndex] = useState(0);
   const [isPrintingAll, setIsPrintingAll] = useState(false);
   const [healthModalAnimal, setHealthModalAnimal] = useState<AnimalResult | null>(null);
+  const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
   const { t } = useLanguage();
   
-  const issueDate = new Date(registration.timestamp);
-  const year = issueDate.getFullYear();
-  const regNum = registration.id.split('-')[1].slice(-4);
-  const stateCode = registration.owner.state.substring(0, 2).toUpperCase();
-  const districtCode = registration.owner.district.substring(0, 4).toUpperCase();
-  
-  const certificateId = `INAPH-CERT-${year}-${regNum}`;
-  const referenceNumber = `BPA/${stateCode}/${districtCode}/${year}/${regNum}`;
-  const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=https://verify.pashuvision.gov.in/CERT/${certificateId}&qzone=1`;
+  const handleDownloadPDF = async () => {
+    setIsGeneratingPDF(true);
+    try {
+      const url = await saveAndUploadCertificate(registration);
+      if (url) {
+        window.open(url, '_blank');
+        toast.success(t('messages.certGenerated'));
+      } else {
+        toast.error(t('messages.certFailed'));
+      }
+    } catch (error) {
+      console.error('Error generating PDF:', error);
+      toast.error(t('messages.certFailed'));
+    } finally {
+      setIsGeneratingPDF(false);
+    }
+  };
 
-  const mask = (value: string, visibleChars = 4) => {
-      if (value.length <= visibleChars) return value;
-      return 'X'.repeat(value.length - visibleChars) + value.slice(-visibleChars);
-  }
+  const issueDate = useMemo(() => new Date(registration.timestamp), [registration.timestamp]);
+  const year = useMemo(() => issueDate.getFullYear(), [issueDate]);
+  const regNum = useMemo(() => registration.id.split('-')[1].slice(-4), [registration.id]);
+  const stateCode = useMemo(() => registration.owner.state.substring(0, 2).toUpperCase(), [registration.owner.state]);
+  const districtCode = useMemo(() => registration.owner.district.substring(0, 4).toUpperCase(), [registration.owner.district]);
   
+  const certificateId = useMemo(() => `INAPH-CERT-${year}-${regNum}`, [year, regNum]);
+  const referenceNumber = useMemo(() => `BPA/${stateCode}/${districtCode}/${year}/${regNum}`, [stateCode, districtCode, year, regNum]);
+  const qrCodeUrl = useMemo(() => `https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=https://verify.pashuvision.gov.in/CERT/${certificateId}&qzone=1`, [certificateId]);
+
   const animalValidityData = useMemo(() => {
     return registration.animals.map(animal => getValidityInfo(animal, issueDate));
   }, [registration.animals, issueDate]);
@@ -313,7 +330,7 @@ const RegistrationDetail: React.FC<{ registration: Registration; onBack: () => v
               validityReason: "Standard 1-Year Validity"
           };
       }
-      return animalValidityData.reduce((earliest, current) =>
+      return animalValidityData.reduce((earliest, current) => 
           current.validUntil < earliest.validUntil ? current : earliest
       );
   }, [animalValidityData, issueDate]);
@@ -351,6 +368,14 @@ const RegistrationDetail: React.FC<{ registration: Registration; onBack: () => v
                 {t('buttons.backToList')}
             </button>
             <div className="flex items-center space-x-2">
+                <button 
+                  onClick={handleDownloadPDF} 
+                  disabled={isGeneratingPDF}
+                  className="flex items-center gap-2 px-3 py-2 text-sm font-semibold text-white bg-primary-700 hover:bg-primary-800 rounded-md border border-primary-800 transition-transform duration-150 active:scale-95 disabled:opacity-50"
+                >
+                  <Icon name={isGeneratingPDF ? 'ai-sparkles' : 'print'} className={`w-4 h-4 ${isGeneratingPDF ? 'animate-spin' : ''}`}/>
+                  {isGeneratingPDF ? t('buttons.generating') : t('buttons.downloadCert')}
+                </button>
                 <button onClick={() => window.print()} className="flex items-center gap-2 px-3 py-2 text-sm font-semibold text-primary-700 hover:bg-gray-100 rounded-md border border-gray-300 transition-transform duration-150 active:scale-95"><Icon name="print" className="w-4 h-4"/>{t('buttons.printCert')}</button>
                 {registration.animals.length > 1 &&
                     <button onClick={handlePrintFullReport} className="flex items-center gap-2 px-3 py-2 text-sm font-semibold text-primary-700 hover:bg-gray-100 rounded-md border border-gray-300 transition-transform duration-150 active:scale-95"><Icon name="history" className="w-4 h-4"/>{t('buttons.printFull')}</button>
@@ -403,9 +428,9 @@ const RegistrationDetail: React.FC<{ registration: Registration; onBack: () => v
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-2 text-sm sm:text-base">
                                     <p><strong className="font-semibold text-primary-800">Name:</strong> {registration.owner.name}</p>
                                     <p><strong className="font-semibold text-primary-800">Location:</strong> {[registration.owner.village, registration.owner.district].filter(Boolean).join(', ')}</p>
-                                    <p><strong className="font-semibold text-primary-800">Mobile:</strong> {maskData ? mask(registration.owner.mobile) : registration.owner.mobile}</p>
+                                    <p><strong className="font-semibold text-primary-800">Mobile:</strong> {maskData ? maskIdNumber(registration.owner.mobile, 'Mobile') : registration.owner.mobile}</p>
                                     <p><strong className="font-semibold text-primary-800">State:</strong> {registration.owner.state}</p>
-                                    <p><strong className="font-semibold text-primary-800">{registration.owner.idType}:</strong> {maskData ? mask(registration.owner.idNumber) : registration.owner.idNumber}</p>
+                                    <p><strong className="font-semibold text-primary-800">{registration.owner.idType}:</strong> {maskData ? maskIdNumber(registration.owner.idNumber, registration.owner.idType) : registration.owner.idNumber}</p>
                                 </div>
                                  <label className="flex items-center text-sm text-gray-600 pt-3 no-print">
                                     <input type="checkbox" checked={!maskData} onChange={() => setMaskData(!maskData)} className="mr-2 h-4 w-4 rounded text-accent-600 focus:ring-accent-500 border-gray-300" />

@@ -1,5 +1,5 @@
 {
-  "name": "Copy of पशुVision: AI Breed Recognition Tool",
+  "name": "PashuVision",
   "description": "An AI-enabled decision-support tool for Veterinary Field-Level Workers to accurately identify and register cattle and buffalo breeds, improving data integrity for livestock management in India.",
   "requestFramePermissions": [
     "camera"

@@ -2,8 +2,8 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { Icon } from './icons';
 
-// @ts-ignore - BarcodeDetector may not be in the default TS lib types
-const hasBarcodeDetector = 'BarcodeDetector' in window && window.BarcodeDetector.getSupportedFormats().then(f => f.includes('qr_code'));
+// @ts-expect-error - BarcodeDetector may not be in the default TS lib types
+const hasBarcodeDetector = 'BarcodeDetector' in window && (window as any).BarcodeDetector.getSupportedFormats().then((f: string[]) => f.includes('qr_code'));
 
 interface CameraModalProps {
   isOpen: boolean;
@@ -54,24 +54,27 @@ export const CameraModal: React.FC<CameraModalProps> = ({ isOpen, onClose, onCap
     }
   }, []);
   
-  const detectCode = useCallback(async () => {
+  const detectCode = useCallback(async function detectCodeFn() {
     if (videoRef.current && videoRef.current.readyState === videoRef.current.HAVE_ENOUGH_DATA && onCodeDetected) {
         try {
-            // @ts-ignore
-            const barcodeDetector = new BarcodeDetector({ formats: ['qr_code'] });
-            const barcodes = await barcodeDetector.detect(videoRef.current);
-            if (barcodes.length > 0 && !isCodeFound) { // Process only the first detected code
-                const detectedCode = barcodes[0];
-                if (navigator.vibrate) {
-                    navigator.vibrate(200); // Haptic feedback
+            // @ts-expect-error - BarcodeDetector may not be in the default TS lib types
+            const BarcodeDetectorClass = (window as { BarcodeDetector?: any }).BarcodeDetector;
+            if (BarcodeDetectorClass) {
+                const barcodeDetector = new BarcodeDetectorClass({ formats: ['qr_code'] });
+                const barcodes = await barcodeDetector.detect(videoRef.current);
+                if (barcodes.length > 0 && !isCodeFound) { // Process only the first detected code
+                    const detectedCode = barcodes[0];
+                    if (navigator.vibrate) {
+                        navigator.vibrate(200); // Haptic feedback
+                    }
+                    setIsCodeFound(true); // Trigger visual feedback
+                    
+                    // Close after a short delay to show feedback
+                    setTimeout(() => {
+                        onCodeDetected(detectedCode.rawValue);
+                    }, 500);
+                    return; // Stop the loop
                 }
-                setIsCodeFound(true); // Trigger visual feedback
-                
-                // Close after a short delay to show feedback
-                setTimeout(() => {
-                    onCodeDetected(detectedCode.rawValue);
-                }, 500);
-                return; // Stop the loop
             }
         } catch (err) {
             // This can happen if the detector is not ready, usually not critical.
@@ -80,7 +83,9 @@ export const CameraModal: React.FC<CameraModalProps> = ({ isOpen, onClose, onCap
     }
     // Continue loop if no code is found
     if (!isCodeFound) {
-      detectionIntervalRef.current = requestAnimationFrame(detectCode);
+      detectionIntervalRef.current = requestAnimationFrame(() => {
+        void detectCodeFn();
+      });
     }
   }, [onCodeDetected, isCodeFound]);
   

@@ -383,8 +383,10 @@ const StatCard: React.FC<{title: string, value: string | number, icon: React.Rea
     useEffect(() => {
         if (!isNumber) {
             // If the value is not a number, just update it directly.
-            setDisplayValue(value);
-            return;
+            const timer = setTimeout(() => {
+                setDisplayValue(value);
+            }, 0);
+            return () => clearTimeout(timer);
         }
 
         const endValue = value as number;
